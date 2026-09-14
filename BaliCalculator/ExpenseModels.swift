@@ -92,16 +92,21 @@ class MenuClassifierService {
     
     // 메뉴 이름 받아 카테고리 라벨을 반환하는 매서드
     func predictCategory(for menuName: String) -> String {
-        guard let model = model else { return "기타" }
+        let lower = menuName.lowercased()
         
-        do {
-            let output = try model.prediction(text: menuName)
-            return output.label
-        } catch {
-            print("카테고리 추론 실패 (\(menuName)): \(error.localizedDescription)")
-            return "기타"
+        // 1차 규칙 기반 방어선 (명확한 키워드 우선 분류)
+        if lower.contains("nasi") || lower.contains("mie") || lower.contains("kwetiaw") || lower.contains("bihun") {
+            return "식사류"
+        } else if lower.contains("es ") || lower.contains("jus") || lower.contains("kopi") || lower.contains("teh") {
+            return "음료"
         }
         
+        // 2차 Core ML 추론
+        guard let model = model,
+              let output = try? model.prediction(text: menuName) else {
+            return "기타"
+        }
+        return output.label
     }
     
 }
