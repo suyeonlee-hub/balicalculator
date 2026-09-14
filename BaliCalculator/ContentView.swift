@@ -246,9 +246,11 @@ struct ContentView: View {
                                 .foregroundColor(.orange)
                                 .cornerRadius(4)
                         }
-                        Text("(\(item.translatedName))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        if item.translatedName != item.rawName {
+                            Text("(\(item.translatedName))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     Spacer()

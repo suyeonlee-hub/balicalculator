@@ -10,52 +10,68 @@ import Foundation
 final class MenuParserService {
     private let classifier = MenuClassifierService()
 
-    // 1. 완성형 고유 명사 사전 (특정 시그니처 메뉴)
+    // 1. 고유명사/시그니처 메뉴 완제 사전
     private let exactMenuDict: [String: String] = [
-        "tumis kangkung": "모닝글로리 볶음",
+        "tumis kangkung": "공심채 볶음",
         "tumis kuciwis": "미니 양배추 볶음",
         "tumis toge": "숙주 볶음",
-        "gado gado": "인도네시아식 샐러드",
-        "sayur asem": "타마린드 야채탕",
+        "gado gado": "가도가도 샐러드",
+        "sayur asem": "새콤 채소탕",
         "es teh": "아이스티",
         "es jeruk": "오렌지 주스",
         "air mineral": "생수"
     ]
 
-    // 2. 단어 조합형 사전 (인도네시아 요리 문법)
-    private let baseIngredients: [String: String] = [
-        "kwetiaw": "납작 쌀국수",
-        "kwetiau": "납작 쌀국수",
-        "bihun": "버미셀리",
-        "mie": "국수",
-        "nasi": "밥",
-        "ayam": "닭고기",
-        "sapi": "소고기",
-        "kambing": "염소",
-        "bebek": "오리고기",
-        "babi": "돼지고기",
-        "ikan": "생선",
-        "seafood": "시푸드",
-        "udang": "새우",
-        "cumi": "오징어",
-        "gurame": "구라미",
-        "kangkung": "공심채",
-        "tahu": "두부",
-        "tempe": "템페"
+    // 2. 단어 레이어별 사전 (한국어 조합 순서에 맞춰 분리)
+    // Layer 1: 상태, 소스, 형용사 (가장 앞에 위치)
+    private let modifierDict: [String: String] = [
+        "asin": "염장(짠)",
+        "manis": "달콤",
+        "pedas": "매운",
+        "tawar": "무설탕",
+        "asam manis": "새콤달콤",
+        "lada hitam": "블랙페퍼",
+        "keju": "치즈",
+        "crispy": "바삭한"
     ]
 
-    private let cookingMethods: [String: String] = [
-        "goreng": "튀김/볶음",
-        "tumis": "볶음",
+    // Layer 2: 단백질 및 토핑 재료
+    private let proteinDict: [String: String] = [
+        "ayam": "닭고기",
+        "sapi": "소고기",
+        "bebek": "오리고기",
+        "babi": "돼지고기",
+        "kambing": "염소고기",
+        "ikan": "생선",
+        "udang": "새우",
+        "cumi": "오징어",
+        "seafood": "해산물",
+        "bakso": "미트볼",
+        "telur": "계란",
+        "tahu": "두부",
+        "tempe": "템페",
+        "kangkung": "모닝글로리"
+    ]
+
+    // Layer 3: 조리 방식
+    private let methodDict: [String: String] = [
+        "goreng": "볶음",
         "bakar": "구이",
-        "siram": "국물 끼얹은",
-        "kuah": "탕",
         "rebus": "삶은",
-        "crispy": "바삭 튀김",
-        "asam manis": "탕수",
-        "lada hitam": "블랙페퍼",
-        "rica rica": "매콤 볶음",
-        "balado": "칠리 양념"
+        "kuah": "국물",
+        "siram": "소스얹은",
+        "panggang": "오븐구이"
+    ]
+
+    // Layer 4: 기본 주식/면류 (한국어 문장의 가장 끝에 위치)
+    private let stapleDict: [String: String] = [
+        "nasi": "밥",
+        "mie": "국수",
+        "kwetiaw": "쌀국수",
+        "kwetiau": "쌀국수",
+        "bihun": "버미셀리",
+        "sup": "수프",
+        "soto": "탕"
     ]
 
     func parseMenuItems(from rawLines: [String]) -> [MenuItem] {
@@ -86,7 +102,6 @@ final class MenuParserService {
             return nil
         }
 
-        // 스마트 번역 엔진 호출
         let translated = translateMenuName(nameString)
         let category = classifier.predictCategory(for: nameString)
 
@@ -99,51 +114,85 @@ final class MenuParserService {
         )
     }
 
-    // 스마트 조합 번역 엔진
-    private func translateMenuName(_ rawName: String) -> String {
-        let lower = rawName.lowercased()
+    // 토큰 기반 어순 재배열 번역 엔진
+        private func translateMenuName(_ rawName: String) -> String {
+            let lower = rawName.lowercased()
 
-        // 1) 고유 메뉴 사전 우선 탐색
-        for (key, val) in exactMenuDict {
-            if lower.contains(key) {
-                return val
-            }
-        }
-
-        // 2) 토큰 분해 후 조합 매핑
-        var foundMethod: String? = nil
-        var foundBase: [String] = []
-
-        // 조리법 탐색
-        for (methodKey, methodVal) in cookingMethods {
-            if lower.contains(methodKey) {
-                foundMethod = methodVal
-                break
-            }
-        }
-
-        // 재료 탐색
-        for (ingKey, ingVal) in baseIngredients {
-            if lower.contains(ingKey) {
-                foundBase.append(ingVal)
-            }
-        }
-
-        // 조합 규칙: [단백질/재료...] + [조리법]
-        if !foundBase.isEmpty {
-            let baseText = foundBase.joined(separator: " ")
-            if let method = foundMethod {
-                if method == "국물 끼얹은" {
-                    return "\(method) \(baseText)" // 예: 국물 끼얹은 납작 쌀국수 닭고기
-                } else {
-                    return "\(baseText) \(method)" // 예: 버미셀리 소고기 볶음
+            // 1) 완성형 고유명사 사전 우선 탐색
+            for (key, val) in exactMenuDict {
+                if lower.contains(key) {
+                    return val
                 }
             }
-            return baseText
-        }
 
-        return rawName // 매칭 실패 시 원문 노출
-    }
+            // 2) 다중 단어 키(예: "telur asin", "asam manis", "lada hitam") 우선 매핑
+            var workingText = lower
+            var replacedPhrases: [String: (korean: String, layer: Int)] = [:]
+            
+            let allMultiWordDicts: [(dict: [String: String], layer: Int)] = [
+                (modifierDict, 1),
+                (proteinDict, 2),
+                (methodDict, 3),
+                (stapleDict, 4)
+            ]
+
+            // 복합어 먼저 치환 (공백 포함 키워드 보호)
+            for (dict, layer) in allMultiWordDicts {
+                for (key, val) in dict where key.contains(" ") {
+                    if workingText.contains(key) {
+                        let placeholder = "__PHRASE_\(replacedPhrases.count)__"
+                        replacedPhrases[placeholder] = (val, layer)
+                        workingText = workingText.replacingOccurrences(of: key, with: placeholder)
+                    }
+                }
+            }
+
+            // 3) 단어 단위 분해 및 레이어 할당
+            let tokens = workingText.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            var recognizedModifiers: [String] = []  // Layer 1
+            var recognizedProteins: [String] = []   // Layer 2
+            var recognizedMethods: [String] = []    // Layer 3
+            var recognizedStaples: [String] = []    // Layer 4
+            var unmappedWords: [String] = []        // 사전에 없는 원어 단어
+
+            for token in tokens {
+                if let matched = replacedPhrases[token] {
+                    switch matched.layer {
+                    case 1: recognizedModifiers.append(matched.korean)
+                    case 2: recognizedProteins.append(matched.korean)
+                    case 3: recognizedMethods.append(matched.korean)
+                    case 4: recognizedStaples.append(matched.korean)
+                    default: break
+                    }
+                } else if let val = modifierDict[token] {
+                    recognizedModifiers.append(val)
+                } else if let val = proteinDict[token] {
+                    recognizedProteins.append(val)
+                } else if let val = methodDict[token] {
+                    recognizedMethods.append(val)
+                } else if let val = stapleDict[token] {
+                    recognizedStaples.append(val)
+                } else {
+                    // 사전에 없는 단어는 원어 그대로 보존
+                    unmappedWords.append(token)
+                }
+            }
+
+            // 4) 한국어 어순 조립: [미번역 원어 단어] + [상태/양념] + [재료] + [조리법] + [주식]
+            var finalComponents: [String] = []
+            if !unmappedWords.isEmpty { finalComponents.append(unmappedWords.joined(separator: " ")) }
+            if !recognizedModifiers.isEmpty { finalComponents.append(recognizedModifiers.joined(separator: " ")) }
+            if !recognizedProteins.isEmpty { finalComponents.append(recognizedProteins.joined(separator: " ")) }
+            if !recognizedMethods.isEmpty { finalComponents.append(recognizedMethods.joined(separator: " ")) }
+            if !recognizedStaples.isEmpty { finalComponents.append(recognizedStaples.joined(separator: " ")) }
+
+            // 전체가 미번역 단어뿐인 경우 원문 반환
+            if finalComponents.joined(separator: " ") == rawName.lowercased() {
+                return rawName
+            }
+
+            return finalComponents.joined(separator: " ")
+        }
 
     private func extractPriceValue(from string: String) -> Double? {
         var clean = string.lowercased().replacingOccurrences(of: "rp", with: "").trimmingCharacters(in: .whitespaces)
