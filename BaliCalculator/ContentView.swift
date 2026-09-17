@@ -25,7 +25,16 @@ struct ContentView: View {
     @State private var serviceRate: Double = 0.058 // 5.8%
     @State private var taxRate: Double = 0.10      // 10%
     @State private var cardRate: Double = 0.02     // 2%
-
+    
+    // [추가] 기본 생성자 (앱 실제 실행용)
+    init() {}
+    
+    // [추가] 프리뷰 및 테스트용 생성자
+    init(mockItems: [MenuItem]) {
+        _scannedItems = State(initialValue: mockItems)
+    }
+    
+    
     // 서비스 인스턴스
     private let ocrService = VisionOCRService()
     private let parserService = MenuParserService()
@@ -39,41 +48,70 @@ struct ContentView: View {
             cardRate: cardRate
         )
     }
-
+    
     // 장바구니 연산 프로퍼티
     private var totalItemCount: Int {
         cartItems.reduce(0) { $0 + $1.count }
     }
-
+    
     private var calculationResult: (subtotal: Double, additionals: Double, grandTotal: Double, grandTotalKRW: Int) {
         calculator.calculateGrandTotal(items: cartItems)
     }
-
+    
     private var isOverBudget: Bool {
         calculationResult.grandTotalKRW > budgetKRW && !cartItems.isEmpty
     }
-
+    
     private var overBudgetAmount: Int {
         max(0, calculationResult.grandTotalKRW - budgetKRW)
     }
-
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground).ignoresSafeArea()
-
+            // 2. [추가] 리퀴드 글래스 앰비언트 라이트 레이어
+            GeometryReader { proxy in
+                ZStack {
+                    // 상단 좌측 은은한 블루/민트 글로우 (Budget Bar 투과용)
+                    Circle()
+                        .fill(Color.blue.opacity(0.12))
+                        .frame(width: 260, height: 260)
+                        .blur(radius: 65)
+                        .offset(x: -60, y: -40)
+                    
+                    // 중간 우측 은은한 오렌지/앰버 글로우 (메뉴 리스트 투과용)
+                    Circle()
+                        .fill(Color.orange.opacity(0.10))
+                        .frame(width: 240, height: 240)
+                        .blur(radius: 60)
+                        .offset(x: proxy.size.width - 180, y: proxy.size.height * 0.35)
+                    
+                    // 하단 중앙 은은한 인디고 글로우 (하단 Liquid Glass Cart Bar 투과용)
+                    Circle()
+                        .fill(Color.indigo.opacity(0.10))
+                        .frame(width: 280, height: 280)
+                        .blur(radius: 70)
+                        .offset(x: proxy.size.width * 0.2, y: proxy.size.height - 180)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false) // 중요: 배경 터치 간섭 차단
+            
+            // 메인 콘텐츠 레이어
             VStack(spacing: 0) {
                 // 상단 Budget Bar
                 topBudgetBar
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .zIndex(1)
-
+                    
+                
                 ScrollView {
                     VStack(spacing: 16) {
                         // 메뉴판 프리뷰 & 촬영 버튼
                         imagePreviewSection
                             .padding(.top, 12)
-
+                        
                         // 스캔된 메뉴 리스트
                         scannedMenuSection
                     }
@@ -81,7 +119,7 @@ struct ContentView: View {
                     .padding(.bottom, 220) // 하단 Cart 바에 가려지지 않도록 여백 확보
                 }
             }
-
+            
             // 하단 반투명 Liquid Glass 장바구니 바
             if !cartItems.isEmpty {
                 bottomCartBar
@@ -106,16 +144,16 @@ struct ContentView: View {
             processMenuImage(image)
         }
     }
-
+    
     // MARK: - UI Components
-
+    
     // 1. 상단 Budget Bar (Liquid Glass 인터페이스)
     private var topBudgetBar: some View {
         HStack {
             Text("Budget:")
                 .font(.headline)
                 .foregroundColor(.secondary)
-
+            
             // 탭하면 넘패드로 직접 금액 입력
             HStack(spacing: 2) {
                 TextField("예산 입력", text: $budgetInput)
@@ -134,7 +172,7 @@ struct ContentView: View {
                             budgetKRW = newBudget
                         }
                     }
-
+                
                 Text("원")
                     .font(.title3.bold())
             }
@@ -142,9 +180,9 @@ struct ContentView: View {
             .padding(.vertical, 4)
             .background(Color.black.opacity(0.04))
             .cornerRadius(8)
-
+            
             Spacer()
-
+            
             // 키보드가 올라왔을 때 닫기(완료) 버튼 노출
             if isBudgetFocused {
                 Button("완료") {
@@ -159,23 +197,18 @@ struct ContentView: View {
                 .foregroundColor(.blue)
                 .padding(.trailing, 4)
             }
-
+            
             Text("🇰🇷")
                 .font(.title2)
                 .padding(6)
-                .background(Circle().fill(Color.white.opacity(0.8)))
+                .background(Circle().fill(Color.white.opacity(0.4)))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.4), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        .liquidGlassCard(cornerRadius: 16)
+        
     }
-
+    
     // 2. 이미지 프리뷰 섹션
     private var imagePreviewSection: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -183,7 +216,7 @@ struct ContentView: View {
                 RoundedRectangle(cornerRadius: 18)
                     .fill(Color(.secondarySystemBackground))
                     .frame(height: 200)
-
+                
                 if let image = selectedImage {
                     Image(uiImage: image)
                         .resizable()
@@ -201,7 +234,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-
+                
                 if isProcessing {
                     ProgressView("메뉴 분석 중...")
                         .padding()
@@ -209,7 +242,7 @@ struct ContentView: View {
                         .cornerRadius(12)
                 }
             }
-
+            
             // Retake / 촬영 버튼
             Button(action: { showImagePicker = true }) {
                 HStack(spacing: 6) {
@@ -228,7 +261,7 @@ struct ContentView: View {
             .padding(12)
         }
     }
-
+    
     // 3. 스캔된 메뉴 리스트
     private var scannedMenuSection: some View {
         VStack(spacing: 10) {
@@ -252,9 +285,9 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-
+                    
                     Spacer()
-
+                    
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(formatIDR(item.localPrice))
                             .font(.subheadline.bold())
@@ -263,7 +296,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     .padding(.trailing, 8)
-
+                    
                     // 담기 (+) 버튼
                     Button(action: { addToCart(item) }) {
                         Image(systemName: "plus")
@@ -275,12 +308,11 @@ struct ContentView: View {
                     }
                 }
                 .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(14)
+                .liquidGlassCard(cornerRadius: 16) // 글래스모피즘 적용
             }
         }
     }
-
+    
     // 4. 하단 Liquid Glass 장바구니 바
     private var bottomCartBar: some View {
         VStack(spacing: 12) {
@@ -305,7 +337,7 @@ struct ContentView: View {
                         Text(formatKRW(calculator.convertToKRW(localAmount: item.localPrice * Double(item.count))))
                             .font(.caption.bold())
                             .padding(.trailing, 6)
-
+                        
                         // [-] 수량 [+] 컨트롤러
                         HStack(spacing: 8) {
                             Button(action: { decrementItem(item) }) {
@@ -316,11 +348,11 @@ struct ContentView: View {
                                     .background(Color.black.opacity(0.06))
                                     .clipShape(Circle())
                             }
-
+                            
                             Text("\(item.count)")
                                 .font(.caption.bold())
                                 .frame(minWidth: 16)
-
+                            
                             Button(action: { incrementItem(item) }) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 10, weight: .bold))
@@ -334,7 +366,8 @@ struct ContentView: View {
                 }
             }
             .padding(.bottom, 4)
-
+            
+            
             // 소계 및 아이템 개수 캡슐
             HStack(spacing: 10) {
                 Text("Sum: \(formatKRW(calculator.convertToKRW(localAmount: calculationResult.subtotal)))")
@@ -343,23 +376,23 @@ struct ContentView: View {
                     .padding(.vertical, 8)
                     .background(Color.black.opacity(0.06))
                     .clipShape(Capsule())
-
+                
                 Text("\(totalItemCount) items")
                     .font(.caption.bold())
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color.black.opacity(0.06))
                     .clipShape(Capsule())
-
+                
                 Spacer()
             }
-
+            
             // 최종 결제 예정 금액 및 예산 초과 경고
             HStack {
                 Text("Pay: \(formatKRW(calculationResult.grandTotalKRW))")
                     .font(.headline)
                     .bold()
-
+                
                 if isOverBudget {
                     HStack(spacing: 4) {
                         Text("🚨")
@@ -372,10 +405,10 @@ struct ContentView: View {
                     .background(Color.red.opacity(0.1))
                     .clipShape(Capsule())
                 }
-
+                
                 Spacer()
             }
-
+            
             // 액션 버튼 (Show Details / Reset Cart)
             HStack(spacing: 10) {
                 Button(action: { showCartDetails = true }) {
@@ -387,7 +420,7 @@ struct ContentView: View {
                         .background(Color.indigo.opacity(0.15))
                         .cornerRadius(12)
                 }
-
+                
                 Button(action: { cartItems.removeAll() }) {
                     Text("Reset Cart")
                         .font(.subheadline.bold())
@@ -410,9 +443,9 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
     }
-
+    
     // MARK: - Logic Helpers
-
+    
     private func addToCart(_ item: MenuItem) {
         if let index = cartItems.firstIndex(where: { $0.rawName == item.rawName }) {
             cartItems[index].count += 1
@@ -423,20 +456,19 @@ struct ContentView: View {
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
-
+    
     private func processMenuImage(_ image: UIImage) {
         isProcessing = true
         scannedItems.removeAll()
-
-        ocrService.recognizeText(from: image) { rawLines in
-            let parsed = parserService.parseMenuItems(from: rawLines)
-            DispatchQueue.main.async {
-                self.scannedItems = parsed
-                self.isProcessing = false
-            }
+        
+        // recognizeText -> processImage로 변경, parseMenuItems -> parseElements로 연결
+        ocrService.processImage(image) { elements in
+            let parsed = self.parserService.parseElements(elements)
+            self.scannedItems = parsed
+            self.isProcessing = false
         }
     }
-
+    
     private func formatIDR(_ amount: Double) -> String {
         let intAmount = Int(amount)
         if intAmount % 1000 == 0 {
@@ -464,7 +496,7 @@ struct ContentView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }
-
+    
     private func decrementItem(_ item: MenuItem) {
         if let index = cartItems.firstIndex(where: { $0.id == item.id }) {
             if cartItems[index].count > 1 {
@@ -477,4 +509,68 @@ struct ContentView: View {
         }
     }
     
+}
+
+extension View {
+    func liquidGlassCard(cornerRadius: CGFloat = 20) -> some View {
+        self
+            .background(.ultraThinMaterial) // 뒤 배경 투과 블러
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                // 모서리 빛 반사 (Rim Light) 효과
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.6),
+                                Color.white.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 8)
+    }
+}
+
+#Preview {
+    ContentView(mockItems: [
+        MenuItem(
+            rawName: "Sop Buntut",
+            translatedName: "소꼬리 맑은 탕",
+            category: "육류",
+            localPrice: 85000,
+            count: 1
+        ),
+        MenuItem(
+            rawName: "Nasi Goreng Seafood",
+            translatedName: "모둠 해산물 볶음밥",
+            category: "식사류",
+            localPrice: 45000,
+            count: 2
+        ),
+        MenuItem(
+            rawName: "Ayam Geprek Sambal Matah",
+            translatedName: "발리식 생삼발 양념 바삭튀김 닭고기",
+            category: "육류",
+            localPrice: 38000,
+            count: 0
+        ),
+        MenuItem(
+            rawName: "Tumis Kangkung",
+            translatedName: "모닝글로리(공심채) 볶음",
+            category: "채소류",
+            localPrice: 25000,
+            count: 1
+        ),
+        MenuItem(
+            rawName: "Es Teh Manis",
+            translatedName: "달콤한 아이스티",
+            category: "음료",
+            localPrice: 10000,
+            count: 3
+        )
+    ])
 }

@@ -5,56 +5,71 @@
 //  Created by Su-Yeon Lee on 9/14/26.
 //
 
-import UIKit
 import Vision
+import UIKit
+
+struct OCRTextElement {
+    let text: String
+    let box: CGRect // Vision 정규화 좌표계 (0.0 ~ 1.0, 좌하단이 0,0)
+}
 
 final class VisionOCRService {
-    
-    // 이미지를 비동기로 받아 텍스트 라인 배열을 반환하는 메서드
-    func recognizeText(from image: UIImage, completion: @escaping ([String]) -> Void) {
+    func processImage(_ image: UIImage, completion: @escaping ([OCRTextElement]) -> Void) {
         guard let cgImage = image.cgImage else {
             completion([])
             return
         }
 
-        // 1. Vision 텍스트 인식 요청 생성
-        let request = VNRecognizeTextRequest { (request, error) in
+        // 1. 카메라/갤러리 사진의 회전 메타데이터 추출
+        let orientation = CGImagePropertyOrientation(image.imageOrientation)
+
+        let request = VNRecognizeTextRequest { request, error in
             guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
-                print("Vision OCR 오류: \(error?.localizedDescription ?? "알 수 없음")")
                 DispatchQueue.main.async { completion([]) }
                 return
             }
 
-            // 2. 인식된 각 영역에서 가장 신뢰도 높은 텍스트만 추출
-            var extractedLines: [String] = []
-            for observation in observations {
-                if let candidate = observation.topCandidates(1).first {
-                    let trimmed = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty {
-                        extractedLines.append(trimmed)
+            var elements: [OCRTextElement] = []
+            for obs in observations {
+                if let topCandidate = obs.topCandidates(1).first {
+                    let text = topCandidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty {
+                        elements.append(OCRTextElement(text: text, box: obs.boundingBox))
                     }
                 }
             }
-
-            // 3. 메인 스레드로 결과 콜백 전달
+            
+            // 2. 메인 스레드로 안전하게 콜백 반환
             DispatchQueue.main.async {
-                completion(extractedLines)
+                completion(elements)
             }
         }
 
-        // 3. 정확도 및 언어 설정 (정밀 모드 + 영어/인니어 라틴 문자셋 최적화)
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
+        request.usesLanguageCorrection = false // 인니어 고유명사 보호
+        request.recognitionLanguages = ["id-ID", "en-US"]
 
-        // 4. 백그라운드 큐에서 실행하여 UI 멈춤 방지
+        // 3. 방향 정보(orientation)를 포함하여 핸들러 생성
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
         DispatchQueue.global(qos: .userInitiated).async {
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                print("Vision 실행 실패: \(error.localizedDescription)")
-                DispatchQueue.main.async { completion([]) }
-            }
+            try? handler.perform([request])
+        }
+    }
+}
+
+// MARK: - UIImage.Orientation -> CGImagePropertyOrientation 변환 확장
+private extension CGImagePropertyOrientation {
+    init(_ uiOrientation: UIImage.Orientation) {
+        switch uiOrientation {
+        case .up: self = .up
+        case .upMirrored: self = .upMirrored
+        case .down: self = .down
+        case .downMirrored: self = .downMirrored
+        case .left: self = .left
+        case .leftMirrored: self = .leftMirrored
+        case .right: self = .right
+        case .rightMirrored: self = .rightMirrored
+        @unknown default: self = .up
         }
     }
 }
